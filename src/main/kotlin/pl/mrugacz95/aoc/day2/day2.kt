@@ -6,12 +6,12 @@ fun Boolean.toInt() = if (this) 1 else 0
 
 data class Policy(val policy: String) {
     companion object {
-        val regex = "(?<least>\\d+)-(?<most>\\d+) (?<char>.): (?<pass>[a-z]+)".toRegex()
+        val regex = "(?<first>\\d+)-(?<second>\\d+) (?<char>.): (?<pass>[a-z]+)".toRegex()
     }
 
     private val groups = regex.matchEntire(policy)?.groups ?: throw RuntimeException("Regex doesn't match")
-    val first = groups["least"]?.value?.toInt() ?: throw RuntimeException("First field not found")
-    val second = groups["most"]?.value?.toInt() ?: throw RuntimeException("Second field not found")
+    val first = groups["first"]?.value?.toInt() ?: throw RuntimeException("First field not found")
+    val second = groups["second"]?.value?.toInt() ?: throw RuntimeException("Second field not found")
     val char = groups["char"]?.value?.get(0) ?: throw RuntimeException("Char field not found")
     val pass = groups["pass"]?.value ?: throw RuntimeException("Pass field not found")
 }
