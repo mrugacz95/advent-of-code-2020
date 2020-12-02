@@ -1,4 +1,4 @@
-package pl.mrugacz95.aoc
+package pl.mrugacz95.aoc.day1
 
 fun solution(numbers: List<Int>) {
     for (i in numbers.indices) {
