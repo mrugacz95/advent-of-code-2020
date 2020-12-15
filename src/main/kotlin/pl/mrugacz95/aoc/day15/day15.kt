@@ -1,7 +1,5 @@
 package pl.mrugacz95.aoc.day15
 
-import java.util.LinkedList
-
 fun findSpokenNumber(turns: List<Int>, toFind: Int): Int {
     var lastFound: Int? = null
     for (i in turns.indices.reversed()) {
@@ -28,27 +26,19 @@ fun part1(numbers: List<Int>): Int {
     return lastNum
 }
 
-fun <E> LinkedList<E>.addAndLimit(e: E, limit: Int) {
-    addLast(e)
-    while (size > limit) {
-        removeFirst()
-    }
-}
-
 fun part2(numbers: List<Int>): Int {
     val lastOccurrences = numbers
         .withIndex()
-        .associateBy({ it.value }, { LinkedList(listOf(it.index)) })
+        .associateBy({ it.value }, { it.index })
         .toMutableMap()
-    var lastNum = numbers.last()
-    for (i in numbers.size until 30000000) {
-        val lastOccur = lastOccurrences[lastNum]
-        val spelledNum = if (lastOccur?.size == 2) lastOccur[1] - lastOccur[0] else 0
-        lastOccurrences.putIfAbsent(spelledNum, LinkedList())
-        lastOccurrences[spelledNum]?.addAndLimit(i, 2)
-        lastNum = spelledNum
+    var nextNum = 0
+    for (turn in numbers.size until 30000000 - 1) {
+        val lastOccur = lastOccurrences[nextNum]
+        val spelledNum = if (lastOccur != null) turn - lastOccur else 0
+        lastOccurrences[nextNum] = turn
+        nextNum = spelledNum
     }
-    return lastNum
+    return nextNum
 }
 
 fun main() {
