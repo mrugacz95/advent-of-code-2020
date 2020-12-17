@@ -1,10 +1,13 @@
 package pl.mrugacz95.aoc.day17
 
+import kotlin.math.abs
+
 fun <T> Iterable<Iterable<T>>.cartesianProduct(other: Iterable<Iterable<T>>): List<List<T>> {
     return this.flatMap { lhsElem -> other.map { rhsElem -> lhsElem + rhsElem } }
 }
 
 fun mixRanges(vararg ranges: IntRange): List<List<Int>> {
+    if (ranges.isEmpty()) return listOf(emptyList())
     return ranges.map { range -> range.map { listOf(it) } }
         .reduce { acc, i -> acc.cartesianProduct(i) }
 }
@@ -15,7 +18,7 @@ fun Cube(vararg values: Int): Cube {
     return values.toList()
 }
 
-operator fun Cube.plus(other: Cube): Cube {
+fun Cube.sumWith(other: Cube): Cube {
     return zip(other).map { it.first + it.second }
 }
 
@@ -50,7 +53,7 @@ class GameOfLife(private val dimensions: Int, input: List<List<Boolean>>) {
     private fun countNeighbours(cube: Cube, state: Set<Cube>): Int {
         var count = 0
         for (neighbour in neighbourhood) {
-            if (cube + neighbour in state) {
+            if (cube.sumWith(neighbour) in state) {
                 count += 1
             }
         }
@@ -92,20 +95,14 @@ class GameOfLife(private val dimensions: Int, input: List<List<Boolean>>) {
     }
 
     fun printState() {
-        if (dimensions > 4) return // skip
-        val outerRange = ranges.getOrElse(3) { 0..0 }
-        for (w in outerRange) {
-            for (z in ranges[2]) {
-                println("z=$z, w=$w")
-                for (y in ranges[1]) {
-                    for (x in ranges[0]) {
-                        if (dimensions > 3)
-                            print(if (listOf(x, y, z, w) in state) ACTIVE else INACTIVE)
-                        else
-                            print(if (listOf(x, y, z) in state) ACTIVE else INACTIVE)
-                    }
-                    println()
+        for (dimension in mixRanges(*ranges.subList(2, dimensions).toTypedArray())) {
+            val names = listOf("z", "w") + List(abs(dimensions - 4)) { "dim${it + 5}" } // take z and w, fill with dimX
+            println(names.zip(dimension).joinToString(", ") { "${it.first}=${it.second}" })
+            for (y in ranges[1]) {
+                for (x in ranges[0]) {
+                    print(if (listOf(x, y) + dimension in state) ACTIVE else INACTIVE)
                 }
+                println()
             }
         }
         println()
@@ -119,9 +116,9 @@ class GameOfLife(private val dimensions: Int, input: List<List<Boolean>>) {
 fun solve(dimensions: Int, input: List<List<Boolean>>): Int {
     val simulation = GameOfLife(dimensions, input)
     for (i in 1..6) {
-//        simulation.printState()
         simulation.step()
     }
+//    simulation.printState()
     return simulation.activeCells()
 }
 
@@ -132,6 +129,7 @@ fun main() {
         .map { row ->
             row.map { it == GameOfLife.ACTIVE }
         }
-    println("Answer part 1: ${solve(3, input)}")
-    println("Answer part 2: ${solve(4, input)}")
+    for (dim in 2..5) {
+        println("Answer part ${dim - 2}: ${solve(dim, input)}")
+    }
 }
