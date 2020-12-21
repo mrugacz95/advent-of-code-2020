@@ -2,7 +2,8 @@ package pl.mrugacz95.aoc.day16
 
 import pl.mrugacz95.aoc.day2.toInt
 import java.lang.RuntimeException
-import java.security.InvalidParameterException
+import java.util.LinkedList
+import kotlin.time.ExperimentalTime
 
 class Ticket(description: String) {
     private val groups = description.split("\n\n")
@@ -42,79 +43,118 @@ class Ticket(description: String) {
         return nearbyTickets.filter { ticketValuesInAllRanges(it) }
     }
 
-    class ExclusiveMatrix(private val labels: List<String>) {
-        private val mat = Array(labels.size) { BooleanArray(labels.size) { true } } // all fields match all labels
+    private fun guessFieldsNames(validTickets: List<List<Int>>, solver: MarriageSolver<String, Int>): Map<String, Int> {
+        val preferences = fields
+            .withIndex()
+            .associateBy({ it.value.first },
+                { field ->
+                    fields.indices
+                        .filter { index -> // matches all ticket values
+                            validTickets
+                                .map { it[index] }
+                                .withIndex()
+                                .all { fieldValue -> isValueValidForRanges(fieldValue.value, field.value.second) }
+                        }
+                        .toSet()
+                })
+        return solver.solve(preferences)
+    }
 
-        fun checkIndex(index: Int) {
-            if (index > labels.size) {
-                throw InvalidParameterException("Index must be less than numbers of labels")
+    fun mulDepartureFields(solver: MarriageSolver<String, Int>): Long {
+        val validTickets = discardInvalidTickets()
+        val fieldsMatch = guessFieldsNames(validTickets, solver)
+        return fieldsMatch.entries
+            .filter { it.key.startsWith("departure") }
+            .map { myTicket[it.value].toLong() }
+            .reduce { acc, i -> acc * i }
+    }
+}
+
+abstract class MarriageSolver<K, V> {
+    abstract fun solve(preferences: Map<K, Set<V>>): Map<K, V>
+}
+
+class GreedySolver<K, V> : MarriageSolver<K, V>() {
+    inner class ExclusiveMatrix(private val rows: Set<K>, private val cols: Set<V>) {
+        init {
+            if (rows.size != cols.size) {
+                throw RuntimeException("Cols size must match rows size")
             }
         }
 
-        fun matchLabel(label: String, index: Int) {
-            checkIndex(index)
-            val labelId = labels.indexOf(label)
-            for (i in labels.indices) {
-                mat[labelId][i] = false
-                mat[i][index] = false
+        private val mat = Array(rows.size) { BooleanArray(rows.size) { true } } // all fields match all labels
+
+        fun match(rowElement: K, colElement: V) {
+            val rowId = rows.indexOf(rowElement)
+            val colId = cols.indexOf(colElement)
+            for (i in mat.indices) {
+                mat[rowId][i] = false
+                mat[i][colId] = false
             }
-            mat[labelId][index] = true
+            mat[rowId][colId] = true
         }
 
-        fun unmatchLabel(label: String, index: Int) {
-            checkIndex(index)
-            val labelId = labels.indexOf(label)
-            mat[labelId][index] = false
+        fun unmatch(rowElement: K, colElement: V) {
+            val rowId = rows.indexOf(rowElement)
+            val colId = cols.indexOf(colElement)
+            mat[rowId][colId] = false
         }
 
         fun determined(): Boolean {
             return mat.map { row -> row.filter { it }.count() }.all { it == 1 }
         }
 
-        fun getMapping(): Map<String, Int> {
+        fun getMapping(): Map<K, V> {
             if (!determined()) {
                 throw RuntimeException("Mapping is not determined yet")
             }
             return mat.withIndex()
-                .associateBy({ labels[it.index] },
+                .associateBy(
+                    { rows.elementAt(it.index) },
                     { row ->
-                        row.value
+                        cols.elementAt(row.value
                             .withIndex()
                             .single { it.value }
-                            .index
+                            .index)
                     })
         }
 
-        fun getLeftMatches(label: String): List<Int> {
-            return mat[labels.indexOf(label)].withIndex().filter { it.value }.map { it.index }
+        fun getMatches(rowElement: K): List<V> {
+            return mat[rows.indexOf(rowElement)]
+                .withIndex()
+                .filter { it.value }
+                .map { cols.elementAt(it.index) }
         }
 
         override fun toString(): String {
-            val longestLabel =
-                (labels.map { it.length }.maxByOrNull { it } ?: throw RuntimeException("No max label length found")) + 1
-            return labels.zip(mat).joinToString("\n", postfix = "\n") { pair ->
-                "${pair.first.padEnd(longestLabel)} ${
+            val longestLabel = (rows.map { it.toString().length }.maxByOrNull { it }
+                ?: throw RuntimeException("No max label length found")) + 1
+            return rows.zip(mat).joinToString("\n", postfix = "\n") { pair ->
+                val matches = getMatches(pair.first)
+                "${pair.first.toString().padEnd(longestLabel)} ${
                     pair.second.joinToString(" ",
                         transform = { value -> value.toInt().toString() })
-                }  ${pair.second.filter { it }.count()}"
+                }  ${pair.second.filter { it }.count()} ${if (matches.size == 1) matches.single().toString() else "?"}"
             }
         }
     }
 
-    private fun guessFieldsNames(validTickets: List<List<Int>>): Map<String, Int> {
-        val guesses = ExclusiveMatrix(fields.map { it.first })
+    override fun solve(preferences: Map<K, Set<V>>): Map<K, V> {
+        val guesses = ExclusiveMatrix(
+            preferences.keys,
+            preferences.values.flatten().toSet()
+        )
         while (!guesses.determined()) {
-            for (label in fields) {
-                val labelMatches = guesses.getLeftMatches(label.first)
-                if (labelMatches.size == 1) { // has match
-                    guesses.matchLabel(label.first, labelMatches.first())
+            for (preference in preferences) {
+                val matches = guesses.getMatches(preference.key)
+                if (matches.size == 1) { // has match
+                    guesses.match(preference.key, matches.first())
                     continue
                 }
-                val ranges = label.second
-                for (ticket in validTickets) {
-                    for ((fieldId, fieldValue) in ticket.withIndex()) {
-                        if (!isValueValidForRanges(fieldValue, ranges)) {
-                            guesses.unmatchLabel(label.first, fieldId)
+                for (candidate in preferences.values.flatten()) {
+                    preferences[preference.key]?.let {
+                        if (candidate !in it) {
+                            guesses.unmatch(preference.key, candidate)
                         }
                     }
                 }
@@ -122,19 +162,10 @@ class Ticket(description: String) {
         }
         return guesses.getMapping()
     }
-
-    fun mulDepartureFields(): Long {
-        val validTickets = discardInvalidTickets()
-        val associatedFields = guessFieldsNames(validTickets)
-        return associatedFields.entries
-            .filter { it.key.startsWith("departure") }
-            .map { myTicket[it.value].toLong() }
-            .reduce { acc, i -> acc * i }
-    }
 }
 
 fun main() {
     val ticket = Ticket({}::class.java.getResource("/day16.in").readText())
     println("Answer part 1: ${ticket.sumInvalidFields()}")
-    println("Answer part 2: ${ticket.mulDepartureFields()}")
+    println("Answer part 2: ${ticket.mulDepartureFields(GreedySolver())}")
 }
