@@ -1,9 +1,6 @@
 package pl.mrugacz95.aoc.day16
 
 import pl.mrugacz95.aoc.day2.toInt
-import java.lang.RuntimeException
-import java.util.LinkedList
-import kotlin.time.ExperimentalTime
 
 class Ticket(description: String) {
     private val groups = description.split("\n\n")
@@ -167,5 +164,92 @@ class GreedySolver<K, V> : MarriageSolver<K, V>() {
 fun main() {
     val ticket = Ticket({}::class.java.getResource("/day16.in").readText())
     println("Answer part 1: ${ticket.sumInvalidFields()}")
-    println("Answer part 2: ${ticket.mulDepartureFields(GreedySolver())}")
+    println("Answer part 2: ${ticket.mulDepartureFields(HopcroftKarpSolver())}")
+}
+
+class HopcroftKarpSolver<U, V> : MarriageSolver<U, V>() {
+
+    sealed class NodeWrapper<U, V> {
+        class UWrapper<U, V>(val value: U) : NodeWrapper<U, V>() {
+            override fun toString(): String {
+                return value.toString()
+            }
+        }
+
+        class VWrapper<U, V>(val value: V) : NodeWrapper<U, V>() {
+            override fun toString(): String {
+                return value.toString()
+            }
+        }
+
+        override fun equals(other: Any?): Boolean {
+            when (other) {
+                is UWrapper<*, *> -> {
+                    if (this is UWrapper)
+                        return other.value == this.value
+                }
+                is VWrapper<*, *> -> {
+                    if (this is VWrapper)
+                        return other.value == this.value
+                }
+            }
+            return false
+        }
+
+        override fun hashCode(): Int {
+            return javaClass.hashCode()
+        }
+    }
+
+    override fun solve(preferences: Map<U, Set<V>>): Map<U, V> {
+        val uMatching = mutableMapOf<U, V>()
+        val vMatching = mutableMapOf<V, U>()
+
+        for (u in preferences.keys) { // all nodes
+            if (u !in uMatching.keys) { // not matched u node
+                val queue = ArrayDeque<NodeWrapper<U, V>>()
+                val visited = mutableSetOf<NodeWrapper<U, V>>()
+                val previous = mutableMapOf<NodeWrapper<U, V>, NodeWrapper<U, V>?>()
+
+                val startNode = NodeWrapper.UWrapper<U, V>(u)
+                queue.add(startNode) // start BFS
+                visited.add(startNode)
+                previous[startNode] = null
+                while (queue.isNotEmpty()) {
+                    when (val current = queue.removeFirst()) {
+                        is NodeWrapper.UWrapper -> { // u node
+                            for (v in preferences[current.value]!!) { // all neighbours
+                                val neighbour = NodeWrapper.VWrapper<U, V>(v)
+                                if (neighbour !in visited) { // only not visited
+                                    visited.add(neighbour) // set visited
+                                    previous[neighbour] = current // set previous
+                                    queue.add(neighbour) // queue up node
+                                }
+                            }
+                        }
+                        is NodeWrapper.VWrapper -> { // v node
+                            if (current.value !in vMatching) { // without matching
+                                var node = current
+                                while (previous[node] != null) { // iterate path to startNode, pseudo DFS
+                                    if (node is NodeWrapper.VWrapper) {
+                                        val newMatching = (previous[node]!! as NodeWrapper.UWrapper).value
+                                        vMatching[node.value] = newMatching
+                                        uMatching[newMatching] = node.value
+                                    }
+                                    node = previous[node]!!
+                                }
+                                break // found unmatched v node, end loop
+                            } else { // has matching
+                                val matching = NodeWrapper.UWrapper<U, V>(vMatching[current.value]!!)
+                                visited.add(matching) // set visited
+                                previous[matching] = current // set previous
+                                queue.add(matching) // queue up node
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return uMatching
+    }
 }
